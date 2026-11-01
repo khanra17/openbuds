@@ -23,6 +23,9 @@ compose.desktop {
                 iconFile.set(project.file("packaging/openbuds.ico"))
             }
             linux { iconFile.set(project.file("src/main/resources/openbuds.png")) }
+            // JDK 21 jpackage rejects a zero major on macOS. This is bundle
+            // packaging metadata, not a change to the application version (0.4.0).
+            macOS { packageVersion = "1.4.0" }
         }
     }
 }

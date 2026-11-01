@@ -78,41 +78,7 @@ jobs:
             python tools/package_release.py --platform '${{ matrix.platform }}' --runtime "$runtime" --launcher "$launcher" --image "$image" --rust-metadata target/rust-metadata.json --jvm-metadata apps/compose/desktopApp/build/runtime-artifacts.tsv
           done
       - name: Stage standalone CLI and C SDK with matching source and notices
-        shell: bash
-        env:
-          NATIVE_PLATFORM: ${{ matrix.platform }}
-        run: |
-          python - <<'PY'
-          import os
-          from pathlib import Path
-          import shutil
-          import hashlib
-          platform = os.environ["NATIVE_PLATFORM"]
-          name = f"OpenBuds-{platform}-cli-sdk"
-          output = Path("target/native-artifacts") / name
-          output.mkdir(parents=True)
-          release = Path("target/release")
-          if platform.startswith("windows"):
-              binaries = ["buds.exe", "openbuds.dll", "openbuds.dll.lib"]
-          elif platform.startswith("macos"):
-              binaries = ["buds", "libopenbuds.dylib"]
-          else:
-              binaries = ["buds", "libopenbuds.so"]
-          for name in binaries:
-              shutil.copy2(release / name, output / name)
-          shutil.copytree("bindings/c/include", output / "include")
-          shutil.copy2("bindings/c/README.md", output / "C-SDK.md")
-          shutil.copy2("bindings/c/tests/smoke.c", output / "smoke.c")
-          shutil.copy2("docs/cli.md", output / "CLI.md")
-          source = Path("target/packages/staging") / f"OpenBuds-{platform}-bundled-runtime"
-          for name in ["LICENSE", "THIRD_PARTY_NOTICES.md", "THIRD_PARTY_LICENSES.html", "DEPENDENCIES.json", "SOURCE.md", "workspace-source.tar.gz"]:
-              shutil.copy2(source / name, output / name)
-          (output / "BUILD.txt").write_text(f"Platform: {platform}\nCommit: {os.environ['GITHUB_SHA']}\nNo publisher signing. See SOURCE.md and CLI.md.\n", encoding="utf-8")
-          archive = Path(shutil.make_archive(str(Path("target/packages") / name), "zip" if platform.startswith("windows") else "gztar", root_dir=output.parent, base_dir=output.name))
-          with archive.open("rb") as stream:
-              checksum = hashlib.file_digest(stream, "sha256").hexdigest()
-          archive.with_suffix(archive.suffix + ".sha256").write_text(f"{checksum}  {archive.name}\n", encoding="utf-8")
-          PY
+        run: python tools/package_native.py --platform '${{ matrix.platform }}'
       - uses: actions/upload-artifact@v7
         with:
           name: openbuds-cli-sdk-${{ matrix.platform }}
@@ -142,6 +108,16 @@ jobs:
           path: target/packages/*-external-java.*
           if-no-files-found: error
           retention-days: 14
+      - name: Print native packaging errors
+        if: failure()
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          for path in sorted(Path("apps/compose/desktopApp/build/compose/logs").rglob("*.txt")):
+              print(f"--- {path} ---")
+              print(path.read_text(encoding="utf-8", errors="replace")[-24000:])
+          PY
       - if: always()
         uses: actions/upload-artifact@v7
         with:
@@ -149,6 +125,8 @@ jobs:
           path: |
             apps/compose/shared/build/reports/tests/
             apps/compose/shared/build/reports/ui/
+            apps/compose/desktopApp/build/compose/logs/
+            apps/compose/desktopApp/build/compose/tmp/*.args.txt
           retention-days: 7
   android:
     name: Android / optimized public-development-key release

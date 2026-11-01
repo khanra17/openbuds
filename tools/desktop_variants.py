@@ -10,7 +10,7 @@ def stage_external(image: Path, platform: str, launcher: Path, output: Path):
         raise ValueError("External variant output must be outside the bundled app image")
     if not launcher.is_file():
         raise ValueError(f"Native external-Java launcher missing: {launcher}")
-    app = image / ("Contents/app" if platform.startswith("macos") else "app")
+    app = image / ("Contents/app" if platform.startswith("macos") else "lib/app" if platform.startswith("linux") else "app")
     jars = sorted(app.glob("*.jar"))
     if not jars:
         raise ValueError(f"No release JARs in {app}")

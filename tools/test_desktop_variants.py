@@ -2,6 +2,7 @@
 import contextlib
 import io
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -64,8 +65,19 @@ class DesktopVariantsTest(unittest.TestCase):
         marker = output / "keep"
         marker.write_text("keep")
         with self.assertRaises(FileExistsError):
-            stage_external(self.image, "linux-x64", self.launcher, output)
+            stage_external(self.image, "windows-x64", self.launcher, output)
         self.assertEqual(marker.read_text(), "keep")
+
+    def test_linux_app_image_uses_lib_app(self):
+        linux = self.root / "main-release/linux/OpenBuds"
+        import shutil
+        shutil.copytree(self.image / "app", linux / "lib/app")
+        output = stage_external(linux, "linux-x64", self.launcher, self.root / "linux-external")
+        self.assertEqual((output / "app/first.jar").read_bytes(), b"first release jar")
+        self.assertTrue((output / "bin/OpenBuds").is_file())
+        if os.name != "nt":  # NTFS does not expose POSIX executable bits.
+            self.assertNotEqual((output / "bin/OpenBuds").stat().st_mode & 0o111, 0)
+        self.assertFalse((output / "lib/runtime").exists())
 
     def test_macos_app_image_uses_contents_app(self):
         mac = self.root / "main-release/OpenBuds.app"

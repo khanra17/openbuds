@@ -32,7 +32,7 @@ bash apps/compose/gradlew -p apps/compose :desktopApp:createReleaseDistributable
 cargo build -p buds-cli -p openbuds-tray -p openbuds-launcher --release --locked
 ```
 
-The optimized app image is under `desktopApp/build/compose/binaries/main-release/app/` (`OpenBuds.app` on macOS). ProGuard shrinks/optimizes JVM bytecode; Rust uses opt-level 3, thin LTO, one codegen unit and stripped debug information. The native bridge's JNI names are kept. No publisher signing/notarization is configured. Windows installers additionally need WiX; portable app images do not require a privately managed signing identity.
+The optimized app image is under `desktopApp/build/compose/binaries/main-release/app/` (`OpenBuds.app` on macOS). ProGuard shrinks/optimizes JVM bytecode; Rust uses opt-level 3, thin LTO, one codegen unit and stripped debug information. The native bridge's JNI names are kept. No publisher signing/notarization is configured. macOS uses bundle package version `1.4.0` for application `0.4.0`, because JDK 21 jpackage rejects zero-major macOS package versions. Windows installers additionally need WiX; portable app images do not require a privately managed signing identity.
 
 ### Two desktop downloads
 
