@@ -72,6 +72,19 @@ fn java_home() -> Result<PathBuf, String> {
     property(&properties, "java.home").filter(|s| !s.is_empty()).map(PathBuf::from)
         .ok_or_else(|| "Java did not report its installation directory. Set JAVA_HOME to a complete Java 21+ runtime.".into())
 }
+fn ui_command(program: &Path) -> Command {
+    let mut command = Command::new(program);
+    // Compose Desktop uses Swing/AWT, which manages the macOS AppKit thread.
+    // -XstartOnFirstThread is for other windowing stacks and deadlocks AWT.
+    command.args([
+        "-XX:+UseSerialGC",
+        "-Xms16m",
+        "-Xmx256m",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Dapple.awt.application.appearance=NSAppearanceNameDarkAqua",
+    ]);
+    command
+}
 fn run() -> Result<(), String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let directory = exe.parent().ok_or("Missing application directory")?;
@@ -116,17 +129,7 @@ fn run() -> Result<(), String> {
         return Ok(());
     }
     let program = executable(&home, true);
-    let mut command = Command::new(program);
-    command.args([
-        "-XX:+UseSerialGC",
-        "-Xms16m",
-        "-Xmx256m",
-        "--enable-native-access=ALL-UNNAMED",
-        "-Dapple.awt.application.appearance=NSAppearanceNameDarkAqua",
-    ]);
-    if cfg!(target_os = "macos") {
-        command.arg("-XstartOnFirstThread");
-    }
+    let mut command = ui_command(&program);
     command.arg(format!("-Dskiko.library.path={}", app.display()));
     command
         .arg(format!(
@@ -176,6 +179,16 @@ fn main() {
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn swing_startup_does_not_force_the_macos_first_thread() {
+        let command = super::ui_command(std::path::Path::new("java"));
+        let args = command.get_args().collect::<Vec<_>>();
+        assert!(!args.iter().any(|arg| *arg == "-XstartOnFirstThread"));
+        assert!(
+            args.iter()
+                .any(|arg| *arg == "--enable-native-access=ALL-UNNAMED")
+        );
+    }
     #[test]
     fn properties_accept_spaces_in_install_paths() {
         assert_eq!(

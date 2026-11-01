@@ -7,11 +7,17 @@ import subprocess
 
 
 def check(executable, argument, environment=None):
-    result = subprocess.run([str(executable.resolve()), argument], capture_output=True, text=True,
-                            timeout=60, check=False, env=environment)
+    try:
+        result = subprocess.run([str(executable.resolve()), argument], capture_output=True, text=True,
+                                timeout=60, check=False, env=environment)
+    except subprocess.TimeoutExpired as error:
+        def decoded(value):
+            return value.decode("utf-8", errors="replace") if isinstance(value, bytes) else value or ""
+        raise RuntimeError(f"{executable.name} {argument} timed out after 60 seconds:\n"
+                           f"{decoded(error.stdout)}\n{decoded(error.stderr)}") from error
     if result.returncode:
         raise RuntimeError(f"{executable.name} {argument} failed ({result.returncode}):\n{result.stdout}\n{result.stderr}")
-    print(f"PASS: {executable} {argument}")
+    print(f"PASS: {executable} {argument}", flush=True)
 
 
 def main():
