@@ -1,6 +1,6 @@
 # C SDK
 
-Use `openbuds.dll`, `libopenbuds.so` or `libopenbuds.dylib` with [include/openbuds.h](include/openbuds.h). The separate `OpenBuds-C-SDK-<platform>` downloads from [release builds](https://github.com/khanra17/openbuds-air7/actions/workflows/build.yml) require no Rust installation. They contain the shared library, Windows import library, header and C example—not the CLI application. Rust developers can instead use the [Rust SDK via Git](../../docs/sdk.md). Match the library to the process architecture.
+Use `openbuds.dll`, `libopenbuds.so` or `libopenbuds.dylib` with [include/openbuds.h](include/openbuds.h). The separate `OpenBuds-C-SDK-<platform>` downloads from [GitHub Releases](https://github.com/khanra17/openbuds/releases/latest) require no Rust installation. They contain the shared library, Windows import library, header and C example—not the CLI application. Rust developers can instead use the [Rust SDK via Git](../../docs/sdk.md). Match the library to the process architecture.
 
 To build the library itself:
 

@@ -14,16 +14,16 @@ from the release’s `SOURCE.md` (use the same revision for both dependencies):
 
 ```toml
 [dependencies]
-openbuds = { package = "realme-buds-ffi", git = "https://github.com/khanra17/openbuds-air7.git", rev = "<commit-sha>" }
-realme-buds = { git = "https://github.com/khanra17/openbuds-air7.git", rev = "<commit-sha>" }
+openbuds = { package = "realme-buds-ffi", git = "https://github.com/khanra17/openbuds.git", rev = "<commit-sha>" }
+realme-buds = { git = "https://github.com/khanra17/openbuds.git", rev = "<commit-sha>" }
 ```
 
 Rust 1.88+ and a native linker are required. Linux also needs `pkg-config` and
 `libdbus-1-dev`. To inspect or modify the SDK locally:
 
 ```sh
-git clone https://github.com/khanra17/openbuds-air7.git
-cd openbuds-air7
+git clone https://github.com/khanra17/openbuds.git
+cd openbuds
 git checkout --detach <commit-sha>
 cargo build -p realme-buds -p realme-buds-ffi --release --locked
 cargo doc -p realme-buds -p realme-buds-ffi --no-deps

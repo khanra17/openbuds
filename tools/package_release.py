@@ -99,7 +99,7 @@ def main():
             item["source_archive"] = f"https://static.crates.io/crates/{package['name']}/{package['name']}-{package['version']}.crate"
             item["sha256"] = lock.get((package["name"], package["version"]), {}).get("checksum")
         else:
-            item["source"] = f"https://github.com/khanra17/openbuds-air7/tree/{commit}"
+            item["source"] = f"https://github.com/khanra17/openbuds/tree/{commit}"
         dependencies.append(item)
         notices.append(f"<h2>{html.escape(package['name'])} {html.escape(package['version'])}</h2><p>{html.escape(package.get('license') or 'See source')}</p>")
         files = set(license_files(root))
@@ -124,10 +124,10 @@ def main():
     (stage / "THIRD_PARTY_LICENSES.html").write_text("\n".join(notices), encoding="utf-8")
     (stage / "DEPENDENCIES.json").write_text(json.dumps(dependencies, indent=2) + "\n", encoding="utf-8")
     (stage / "SOURCE.md").write_text(
-        f"# Source and build information\n\nBuilt from https://github.com/khanra17/openbuds-air7/tree/{commit}\n\n"
+        f"# Source and build information\n\nBuilt from https://github.com/khanra17/openbuds/tree/{commit}\n\n"
         f"Get the matching code and build instructions from Git:\n\n"
-        f"```sh\ngit clone https://github.com/khanra17/openbuds-air7.git\n"
-        f"cd openbuds-air7\ngit checkout --detach {commit}\n```\n\n"
+        f"```sh\ngit clone https://github.com/khanra17/openbuds.git\n"
+        f"cd openbuds\ngit checkout --detach {commit}\n```\n\n"
         "Source is not bundled in this download. The repository at that commit includes the lockfile. "
         "DEPENDENCIES.json records pinned Cargo source archives/checksums and JVM source coordinates. "
         "Use the repository build instructions and preserve applicable dependency notices. Native Skiko/Skia "
