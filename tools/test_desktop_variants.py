@@ -114,7 +114,33 @@ class DesktopVariantsTest(unittest.TestCase):
                 info = json.loads(archive.read(f"{name}/RUNTIME.json"))
                 self.assertEqual(info["java_included"], runtime == "bundled")
                 self.assertIn(f"{name}/OpenBudsTray.exe", files)
+                self.assertNotIn(f"{name}/buds.exe", files)
+                self.assertNotIn(f"{name}/include/openbuds.h", files)
             self.assertTrue(archive_path.with_suffix(".zip.sha256").is_file())
+
+    def test_android_exposes_release_apk_directly_with_checksum_and_notices(self):
+        (self.root / "LICENSE").write_text("project license")
+        (self.root / "THIRD_PARTY_NOTICES.md").write_text("notices")
+        (self.root / "Cargo.lock").write_text("version = 4\npackage = []\n")
+        (self.root / "metadata.json").write_text('{"packages": []}')
+        (self.root / "metadata.tsv").write_text("")
+        apk = self.root / "apk/release/androidApp-release.apk"
+        apk.parent.mkdir(parents=True)
+        apk.write_bytes(b"verified optimized APK")
+        argv = ["package_release.py", "--platform", "android", "--apk", str(apk),
+                "--rust-metadata", str(self.root / "metadata.json"), "--jvm-metadata", str(self.root / "metadata.tsv")]
+        with patch.object(package_release, "ROOT", self.root), patch("sys.argv", argv), \
+                patch.object(package_release.subprocess, "check_output", side_effect=["", "a" * 40, b"matching source"]), \
+                contextlib.redirect_stdout(io.StringIO()):
+            package_release.main()
+        output = self.root / "target/packages/staging/OpenBuds-android-release"
+        self.assertEqual((output / "OpenBuds-android-release.apk").read_bytes(), apk.read_bytes())
+        import hashlib
+        checksum = (output / "OpenBuds-android-release.apk.sha256").read_text().split()[0]
+        self.assertEqual(checksum, hashlib.sha256(apk.read_bytes()).hexdigest())
+        self.assertTrue((output / "SOURCE.md").is_file())
+        self.assertTrue((output / "THIRD_PARTY_LICENSES.html").is_file())
+        self.assertEqual(list((self.root / "target/packages").glob("*.zip")), [])
 
     def test_dirty_source_is_rejected_before_staging(self):
         argv = ["package_release.py", "--platform", "windows-x64", "--image", str(self.image),

@@ -32,7 +32,7 @@ A persisted/read-back value is evidence of stored state only. Physical behavior,
 
 `.github/workflows/check.yml` runs Rust checks, shared Compose UI tests and an Android release/lint build. `.github/workflows/build.yml` additionally builds platform release distributions and packages notices/source metadata. Neither CI workflow can establish physical earbud behavior or replace the manual checks above.
 
-The Android release uses a deliberately public development key; CI verifies its file hash but that key provides no publisher authentication. Desktop artifacts are unsigned.
+The Android release uses the Android Gradle plugin’s default development signing configuration; it remains non-debuggable and optimized. No project keystore or publisher signing is configured. Certificates can differ between machines; this is not publisher authentication. Desktop artifacts are unsigned.
 
 ## Earlier local run · 2026-10-27
 

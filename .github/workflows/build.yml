@@ -77,14 +77,14 @@ jobs:
           for runtime in bundled external-java; do
             python tools/package_release.py --platform '${{ matrix.platform }}' --runtime "$runtime" --launcher "$launcher" --image "$image" --rust-metadata target/rust-metadata.json --jvm-metadata apps/compose/desktopApp/build/runtime-artifacts.tsv
           done
-      - name: Stage standalone CLI and C SDK with matching source and notices
-        run: python tools/package_native.py --platform '${{ matrix.platform }}'
-      - uses: actions/upload-artifact@v7
-        with:
-          name: openbuds-cli-sdk-${{ matrix.platform }}
-          path: target/packages/*-cli-sdk.*
-          if-no-files-found: error
-          retention-days: 14
+      - name: Package standalone CLI and separate C SDK
+        shell: bash
+        run: |
+          python tools/package_native.py --platform '${{ matrix.platform }}' --product cli
+          python tools/package_native.py --platform '${{ matrix.platform }}' --product c-sdk
+      - name: Package Rust SDK source workspace
+        if: runner.os == 'Linux'
+        run: python tools/package_native.py --product rust-sdk
       - name: Smoke-check both launchers and real renderers (no Bluetooth)
         shell: bash
         run: |
@@ -98,13 +98,32 @@ jobs:
           fi
       - uses: actions/upload-artifact@v7
         with:
-          name: openbuds-${{ matrix.platform }}-bundled-runtime
+          name: OpenBuds-CLI-${{ matrix.platform }}
+          path: target/packages/OpenBuds-${{ matrix.platform }}-cli.*
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@v7
+        with:
+          name: OpenBuds-C-SDK-${{ matrix.platform }}
+          path: target/packages/OpenBuds-${{ matrix.platform }}-c-sdk.*
+          if-no-files-found: error
+          retention-days: 14
+      - if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v7
+        with:
+          name: OpenBuds-Rust-SDK-source
+          path: target/packages/OpenBuds-rust-sdk-source.tar.gz*
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@v7
+        with:
+          name: OpenBuds-desktop-${{ matrix.platform }}-bundled-runtime
           path: target/packages/*-bundled-runtime.*
           if-no-files-found: error
           retention-days: 14
       - uses: actions/upload-artifact@v7
         with:
-          name: openbuds-${{ matrix.platform }}-external-java
+          name: OpenBuds-desktop-${{ matrix.platform }}-external-java
           path: target/packages/*-external-java.*
           if-no-files-found: error
           retention-days: 14
@@ -118,10 +137,10 @@ jobs:
               print(f"--- {path} ---")
               print(path.read_text(encoding="utf-8", errors="replace")[-24000:])
           PY
-      - if: always()
+      - if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: ui-tests-${{ matrix.platform }}
+          name: diagnostics-desktop-${{ matrix.platform }}
           path: |
             apps/compose/shared/build/reports/tests/
             apps/compose/shared/build/reports/ui/
@@ -129,7 +148,7 @@ jobs:
             apps/compose/desktopApp/build/compose/tmp/*.args.txt
           retention-days: 7
   android:
-    name: Android / optimized public-development-key release
+    name: Android / optimized release APK
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -148,8 +167,6 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
       - run: sdkmanager --channel=3 "platforms;android-37.0" "build-tools;37.0.0" "ndk;30.0.16248370"
       - run: cargo install cargo-ndk --version 4.1.2 --locked
-      - name: Verify the deliberately public, fixed signing key
-        run: echo '221e0a3106aa4c3ccc154e0a418b55020b3f9ea6e84f92e8749cd9e2f39f5e58  apps/compose/androidApp/signing/public-dev.keystore' | sha256sum -c -
       - run: bash apps/compose/gradlew -p apps/compose :androidApp:assembleRelease :androidApp:lintRelease :androidApp:writeRuntimeMetadata
       - name: Verify APK signing, alignment and non-debuggable manifest
         shell: bash
@@ -168,15 +185,13 @@ jobs:
           python tools/package_release.py --platform android --apk apps/compose/androidApp/build/outputs/apk/release/androidApp-release.apk --rust-metadata target/rust-metadata.json --jvm-metadata apps/compose/androidApp/build/runtime-artifacts.tsv
       - uses: actions/upload-artifact@v7
         with:
-          name: openbuds-android-release-public-dev-key
-          path: |
-            target/packages/*.zip
-            target/packages/*.sha256
+          name: OpenBuds-Android-release
+          path: target/packages/staging/OpenBuds-android-release/
           if-no-files-found: error
           retention-days: 14
-      - if: always()
+      - if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: android-lint
+          name: diagnostics-android
           path: apps/compose/androidApp/build/reports/lint-results-release.*
           retention-days: 7

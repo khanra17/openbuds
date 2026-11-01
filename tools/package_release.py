@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Package Compose app images/APKs, CLI, notices and matching workspace source."""
+"""Package optimized GUI applications with notices and matching source."""
 import argparse
 import hashlib
 import html
@@ -60,7 +60,7 @@ def main():
     commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     output = ROOT / "target/packages"
     variant = "" if args.apk else ("-bundled-runtime" if args.runtime == "bundled" else "-external-java")
-    name = f"OpenBuds-{args.platform}{variant}"
+    name = "OpenBuds-android-release" if args.apk else f"OpenBuds-{args.platform}{variant}"
     stage = output / "staging" / name
     if stage.exists():
         shutil.rmtree(stage)
@@ -68,7 +68,9 @@ def main():
     if args.apk:
         if "release" not in args.apk.parts or not args.apk.is_file():
             parser.error("An optimized release APK is required")
-        shutil.copy2(args.apk, stage / "OpenBuds.apk")
+        apk = stage / "OpenBuds-android-release.apk"
+        shutil.copy2(args.apk, apk)
+        apk.with_suffix(".apk.sha256").write_text(f"{digest(apk)}  {apk.name}\n", encoding="utf-8")
     else:
         if "main-release" not in args.image.parts or not args.image.is_dir():
             parser.error("Use createReleaseDistributable's main-release app image")
@@ -81,7 +83,6 @@ def main():
             "external_java_minimum": 21, "platform": args.platform,
         }, indent=2) + "\n", encoding="utf-8")
         windows = args.platform.startswith("windows")
-        shutil.copy2(ROOT / "target/release" / ("buds.exe" if windows else "buds"), stage)
         if windows:
             shutil.copy2(ROOT / "target/release/openbuds-tray.exe", stage / "OpenBudsTray.exe")
     for file in ["LICENSE", "THIRD_PARTY_NOTICES.md", "Cargo.lock"]:
@@ -139,17 +140,21 @@ def main():
         "click it to launch the full UI. Closing the UI exits its JVM. Or launch OpenBuds/OpenBuds.exe directly.\n"
         "Linux: OpenBuds/bin/OpenBuds. macOS bundled: OpenBuds.app; external-Java: OpenBuds/bin/OpenBuds (no Bluetooth transport; cannot connect to Air7).\n"
         "Desktop builds have no publisher signing or notarization; OS approval may be required.\n"
-        "Android: install OpenBuds.apk. It is a non-debuggable, R8/resource-shrunk release using optimized Rust. "
-        "Its fixed development key is deliberately PUBLIC: anyone can sign forged updates. It provides no publisher authentication.\n"
-        "An older local debug-key installation must be uninstalled once if its signing certificate differs.\n\n"
+        "Android: install OpenBuds-android-release.apk. It is a non-debuggable, R8/resource-shrunk release using optimized Rust. "
+        "Signing uses the Android Gradle plugin default development configuration, not a project-specific key or publisher identity.\n"
+        "Certificates can differ between build machines. A differently signed installation requires uninstalling first, losing local preferences.\n\n"
         "Pair Air7 in system Bluetooth settings first. Android needs Nearby devices permission on Android 12+. "
         "The app does not scan or access the internet. Android retains its connection in a visible foreground service; "
         "removing OpenBuds from Recents closes the session and phone actions.\n"
         "Unknown device values remain unknown. Never use finding tones while worn. "
         "Sound-stop cleanup is best-effort, not a hardware watchdog.\n\n"
-        "CLI: buds --help; buds --json status; buds eq --help; buds --json rpc. "
-        "Full JSON protocol: docs/cli.md in the workspace source archive.\n",
+        "The standalone CLI and developer SDKs are separate downloads.\n",
         encoding="utf-8")
+    if args.apk:
+        # Upload this directory directly: the APK is immediately visible, not
+        # buried inside a second release ZIP inside GitHub’s artifact ZIP.
+        print(stage)
+        return
     if args.platform.startswith("linux"):
         destination = output / f"{name}.tar.gz"
         with tarfile.open(destination, "w:gz") as archive:

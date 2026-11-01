@@ -16,19 +16,14 @@ android {
         ndk { abiFilters += rustAbis.get() }
     }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
-    signingConfigs {
-        create("publicDevelopment") {
-            storeFile = file("signing/public-dev.keystore")
-            storePassword = "android"; keyAlias = "androiddebugkey"; keyPassword = "android"
-        }
-    }
     buildTypes {
-        debug { signingConfig = signingConfigs.getByName("publicDevelopment") }
         release {
             isDebuggable = false
             isMinifyEnabled = true
             isShrinkResources = true
-            signingConfig = signingConfigs.getByName("publicDevelopment")
+            // Use AGP’s default development signing only; this is still the
+            // optimized, non-debuggable release build, not the debug variant.
+            signingConfig = signingConfigs.getByName("debug")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }

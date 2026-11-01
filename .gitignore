@@ -4,8 +4,6 @@
 **/local.properties
 *.jks
 *.keystore
-# Intentionally public development key; never add a private production key.
-!/apps/compose/androidApp/signing/public-dev.keystore
 /research/
 /.agents/
 /.pi/

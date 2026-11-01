@@ -59,9 +59,20 @@ bash apps/compose/gradlew -p apps/compose :desktopApp:createReleaseDistributable
 bash apps/compose/gradlew -p apps/compose :androidApp:assembleRelease
 ```
 
-See [app build instructions](apps/compose/README.md) for SDK/NDK installation, development runs and packaging. GitHub Actions builds optimized desktop app images without publisher signing and a non-debuggable, R8/resource-shrunk Android release. Desktop artifacts are separately labelled `bundled-runtime` and `external-java` for Windows, Linux and macOS. The latter needs a complete, matching-architecture Java 21+ desktop runtime and never downloads Java. Desktop bundles include the CLI; separate `openbuds-cli-sdk-*` artifacts also provide the CLI, native C library/import library, public header and C smoke example with matching source/notices. All release artifacts include source/build information.
+See [app build instructions](apps/compose/README.md) for SDK/NDK installation, development runs and packaging. GitHub Actions builds optimized desktop app images without publisher signing and a non-debuggable, R8/resource-shrunk Android release. Desktop artifacts are separately labelled `bundled-runtime` and `external-java` for Windows, Linux and macOS. The latter needs a complete, matching-architecture Java 21+ desktop runtime and never downloads Java. GUI apps, standalone CLI applications, and developer SDKs are separate downloads. All downloads include source/build information.
 
-**Android releases deliberately use a fixed public development key.** No private keystore or CI secret is needed, and builds can update one another. Anyone can sign forged updates using that key; it is not publisher authentication or production/Play Store signing. [Key provenance and fingerprint](apps/compose/androidApp/signing/README.md).
+| Download | Contents |
+| --- | --- |
+| `OpenBuds-Android-release` | Directly accessible `OpenBuds-android-release.apk` (ARM64, ARMv7, x86_64), checksum and source/notices; no nested application ZIP |
+| `OpenBuds-desktop-<platform>-bundled-runtime` | Optimized GUI with Java included; Windows also includes the native tray host |
+| `OpenBuds-desktop-<platform>-external-java` | Same optimized GUI, requiring Java 21+ |
+| `OpenBuds-CLI-<platform>` | Standalone `buds` executable and CLI documentation; no SDK libraries or headers |
+| `OpenBuds-C-SDK-<platform>` | Native shared library, Windows import library, C header, documentation and C example; no CLI executable |
+| `OpenBuds-Rust-SDK-source` | Matching Rust source workspace/lockfile for developing your own applications |
+
+Platforms: Windows x64, Linux x64, macOS ARM64. macOS has no built-in Bluetooth transport. See [SDK integration](docs/sdk.md). Lint and UI tests still run, but diagnostic artifacts are uploaded only on failure, not alongside successful release downloads. Downloads are under the **Release builds and checks** workflow; **Check** is validation only.
+
+**Android uses the Android Gradle plugin’s default development signing configuration, not a custom project key.** The APK is still an optimized, non-debuggable release build. Google supplies no universal production signing key; this signature is not publisher authentication or Play Store signing. Certificates can differ across build machines, so updating a differently signed installation requires reinstalling and loses local preferences. [Signing details](apps/compose/androidApp/signing/README.md).
 
 ## Safety and evidence
 
