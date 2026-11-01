@@ -1,0 +1,6 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="48" android:viewportHeight="48">
+    <!-- Legacy API 24/25 fallback: no square tile inside a launcher-applied circle. -->
+    <path android:fillColor="#080A09" android:pathData="M24,0a24,24 0,1 0,0 48a24,24 0,1 0,0 -48" />
+    <path android:fillColor="@android:color/transparent" android:strokeColor="#F4F2EC" android:strokeWidth="5" android:pathData="M24,10a14,14 0,1 0,0 28a14,14 0,1 0,0 -28" />
+    <path android:fillColor="#E84A3C" android:pathData="M35,9a4,4 0,1 0,0 8a4,4 0,1 0,0 -8" />
+</vector>

@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/realme-buds", "crates/realme-buds-windows", "bindings/c", "apps/cli", "apps/desktop"]
+members = ["crates/realme-buds", "crates/realme-buds-windows", "crates/realme-buds-linux", "bindings/c", "apps/cli", "apps/tray", "apps/launcher"]
 default-members = ["crates/realme-buds", "crates/realme-buds-windows"]
 resolver = "2"
 
@@ -14,3 +14,9 @@ repository = "https://github.com/khanra17/openbuds-air7"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = "debuginfo"

@@ -1,0 +1,5 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="288dp" android:height="288dp" android:viewportWidth="108" android:viewportHeight="108">
+    <!-- Full-bleed background is a separate adaptive layer. The mark stays in the 66dp safe zone. -->
+    <path android:fillColor="@android:color/transparent" android:strokeColor="#F4F2EC" android:strokeWidth="6" android:pathData="M54,32a22,22 0,1 0,0 44a22,22 0,1 0,0 -44" />
+    <path android:fillColor="#E84A3C" android:pathData="M72,30a6,6 0,1 0,0 12a6,6 0,1 0,0 -12" />
+</vector>

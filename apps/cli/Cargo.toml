@@ -16,6 +16,11 @@ realme-buds = { path = "../../crates/realme-buds" }
 serde_json.workspace = true
 serde.workspace = true
 clap = { version = "4", features = ["derive"] }
+ctrlc = "3"
+realme-buds-ffi = { path = "../../bindings/c" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+realme-buds-linux = { path = "../../crates/realme-buds-linux" }
 
 [target.'cfg(windows)'.dependencies]
 realme-buds-windows = { path = "../../crates/realme-buds-windows" }

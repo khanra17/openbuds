@@ -1,0 +1,14 @@
+<resources>
+    <style name="Theme.OpenBuds" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowBackground">#080A09</item>
+        <item name="android:colorAccent">#F4F2EC</item>
+    </style>
+    <style name="Theme.OpenBuds.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/launcher_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash</item>
+        <item name="postSplashScreenTheme">@style/Theme.OpenBuds</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

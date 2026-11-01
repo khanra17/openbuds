@@ -16,6 +16,11 @@ crate-type = ["cdylib", "rlib"]
 realme-buds = { path = "../../crates/realme-buds" }
 serde.workspace = true
 serde_json.workspace = true
+jni = "0.22.4"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+realme-buds-linux = { path = "../../crates/realme-buds-linux" }
 
 [target.'cfg(windows)'.dependencies]
 realme-buds-windows = { path = "../../crates/realme-buds-windows" }
+windows-sys = { version = "0.61", features = ["Win32_Graphics_Dwm", "Win32_UI_WindowsAndMessaging"] }

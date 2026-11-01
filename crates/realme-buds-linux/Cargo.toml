@@ -1,0 +1,12 @@
+[package]
+name = "realme-buds-linux"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+realme-buds = { path = "../realme-buds" }
+bluer = { version = "0.17", features = ["bluetoothd", "rfcomm"] }
+futures-util = "0.3"
+tokio = { version = "1", features = ["rt", "time", "io-util", "macros"] }

@@ -4,8 +4,8 @@ Hardware evidence is from Air7 firmware 1.1.0.62; case version 088. Verified set
 
 | Control / observation | Device state and evidence | Host behavior / unverified branches |
 | --- | --- | --- |
-| Noise mode | Off, Transparency, Mild, Moderate, Maximum and Adaptive verified in both one-ear setups and both-worn | One mutually exclusive field, not separate ANC enable/strength registers. Neither-worn writes returned status 14 |
-| Remembered ANC level | Not a separately identified device register | Desktop remembers it per address for the session. Off/Transparency do not reveal a saved level. Adaptive-depth query is separate |
+| Noise mode | Off, Transparency, Mild, Moderate, Maximum and Adaptive verified in both one-ear setups and both-worn | One mutually exclusive field, not separate ANC enable/strength registers. Neither-worn writes returned status 14. UI choices are muted with a wear instruction and open explanatory help when neither-worn is known; unexpected rejections receive the same plain-language recovery |
+| Remembered ANC level | Not a separately identified device register | The app persists the last read-back ANC level per model/device and restores it when returning from Off/Transparency. When none has been observed it uses the driver's declared Moderate fallback; that is not a read of the earbud's hidden saved strength. Off/Transparency do not reveal a saved level. Adaptive-depth query is separate |
 | Hold noise cycle | All four stored cycles verified | Physical cycling and restored ANC level untested |
 | Battery / charging / wear / connection | Independent observations; missing battery and unknown flags preserved | No identified lid sensor or measurement timestamps. A reported case 0% is not proof of an empty case |
 | Wind reduction, feature 26 | Boolean readback verified | DSP effect across modes unmeasured |
@@ -20,14 +20,14 @@ Hardware evidence is from Air7 firmware 1.1.0.62; case version 088. Verified set
 | Touch bindings | Both sides' double-tap writes verified, including an in-case peer; all returned rows exposed | Physical gestures and reserved single-tap/long-hold rows not fully tested; some actions need a host |
 | Dual-device, feature 17 | Disable/re-enable verified | Stored preference is not audio-focus ownership |
 | Multipoint | Host list and disconnect/reconnect verified; raw names/flags/extensions retained | Pairing removal untested. SDK “my phone” flag is not control-socket ownership |
-| Fit test | Both-worn returned good fit for both ears after about nine seconds; stop acknowledged. One-ear starts returned status 14 | Failure/interruption branches not physically exercised. Start acknowledgement is not a verdict |
-| Finding tones | Wear/case/connection guard and bounded cleanup implemented | Positive tone untested. Physically remove both earbuds; missing/stale sensors cannot establish safety |
-| Find-phone gesture, feature 38 | Four-tap enable readback verified | No physical four-tap/ringing test; receiving host must implement ringing |
+| Fit test | Both-worn returned good fit for both ears after about nine seconds; stop acknowledged. One-ear starts returned status 14; the frontend explains the both-worn prerequisite | Failure/interruption branches not physically exercised. Start acknowledgement is not a verdict |
+| Finding tones | Legacy SDK guard and bounded cleanup retained; Air7 capability profile hides the UI tool | Positive tone is not validated as working. Do not advertise Air7 support merely because a request exists |
+| Find-phone gesture, feature 38 | Four-tap enable readback verified; Android now implements locally opted-in ring/torch/open-notification handlers | Physical four-tap/phone effects remain untested. Ringing needs API 28+; camera/notifications and background restrictions apply |
 | Host events | Fit, interaction, host operations and unknown packets exposed | Host find-phone operations 5/6 are distinct from touch function 26; OS permissions still apply |
 | Firmware / diagnostics | Versions, IDs and upgrade capabilities read; color/language returned raw codes | No firmware writer. Some profile/usage/auto-off queries time out; unknown codes are not guessed names |
 | Extra feature flags | Returned IDs and values preserved | Generic SDK labels do not prove Air7 effects; experimental writes require separate validation |
 
-`Snapshot::describe()` distinguishes reported, missing and failed reads. Missing data never becomes Off or 0%. Unknown wire values and events retain raw data. Charging/offline/case transitions, cache aging and disconnects during writes are not exhaustively tested. MindFlow/cloud content, host ringing, factory reset and firmware updates are not implemented.
+`Snapshot::describe()` distinguishes reported, missing and failed reads. Missing data never becomes Off or 0%. Unknown wire values and events retain raw data. Charging/offline/case transitions, cache aging and disconnects during writes are not exhaustively tested. MindFlow/cloud content, factory reset and firmware updates are not implemented. Android host actions are implemented but not physically validated by readback or UI tests. Candidate feature 9 remains experimental; it has not been confirmed as Link's Enhance voices control.
 
 ## Protocol details that affect implementation
 

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright 2026 OpenBuds contributors
+use crate::eq::EqCommand;
 use ::realme_buds::devices::air7 as realme_buds;
 use clap::{Parser, Subcommand, ValueEnum};
 use realme_buds::{AncLevel, Feature, NoiseCycle, NoiseMode};
@@ -7,10 +8,13 @@ use realme_buds::{AncLevel, Feature, NoiseCycle, NoiseMode};
 #[command(
     name = "buds",
     version,
-    about = "Unofficial realme Buds Air7 Bluetooth controller"
+    about = "Direct Bluetooth earbud controller using registered SDK model drivers"
 )]
 pub(crate) struct Args {
-    /// Paired Bluetooth address; defaults to the only paired Buds Air7.
+    /// Registered SDK model ID. Inferred only when there is one unambiguous driver.
+    #[arg(long, global = true)]
+    pub(crate) model: Option<String>,
+    /// Paired Bluetooth address; defaults to one matching the selected model profile.
     #[arg(long, global = true)]
     pub(crate) address: Option<String>,
     /// Diagnostic RFCOMM channel override. Normal use resolves the vendor UUID through SDP.
@@ -24,12 +28,28 @@ pub(crate) struct Args {
     /// Use the original numeric wire-level output instead of named semantic descriptions.
     #[arg(long, global = true)]
     pub(crate) raw: bool,
+    /// Compact JSON on stdout, including errors. Recommended for wrappers.
+    #[arg(long, global = true)]
+    pub(crate) json: bool,
     #[command(subcommand)]
     pub(crate) command: Command,
 }
 #[derive(Subcommand)]
 pub(crate) enum Command {
     Devices,
+    /// List registered model profiles, connection metadata and capabilities.
+    Models,
+    /// Send any versioned SDK JSON request. See docs/cli.md.
+    Call {
+        request: String,
+    },
+    /// Persistent NDJSON session on stdin/stdout; one connection, request IDs and cancellation.
+    Rpc,
+    /// Equalizer operations. Flat eq-* spellings remain compatible.
+    Eq {
+        #[command(subcommand)]
+        command: EqCommand,
+    },
     Status,
     Battery,
     Versions,
@@ -47,6 +67,8 @@ pub(crate) enum Command {
         id: u8,
         #[arg(value_enum)]
         state: Switch,
+        #[arg(long)]
+        confirm_experimental: bool,
     },
     Connection {
         address: String,
@@ -93,7 +115,7 @@ pub(crate) enum Command {
     EqSave {
         id: u8,
         name: String,
-        #[arg(num_args = 6, allow_hyphen_values = true)]
+        #[arg(num_args = 6, allow_hyphen_values = true, value_parser = clap::value_parser!(i8).range(-6..=6))]
         gains: Vec<i8>,
         #[arg(long)]
         add: bool,
@@ -116,11 +138,17 @@ pub(crate) enum Command {
         value: Option<i8>,
     },
     Touch,
-    /// Wire IDs documented in docs/protocol.md: ear 1 = left, 2 = right.
+    /// Bind a gesture, e.g. left double-tap play-pause. Numeric IDs also accepted.
     Bind {
+        #[arg(value_parser = parse_ear)]
         ear: u8,
+        #[arg(value_parser = parse_gesture)]
         gesture: u8,
+        #[arg(value_parser = parse_function)]
         function: u8,
+        /// Required for reserved/unverified gestures and actions. Saving is not proof they work.
+        #[arg(long)]
+        confirm_experimental: bool,
     },
     Volume {
         #[arg(value_enum)]
@@ -252,5 +280,66 @@ impl From<FeatureArg> for Feature {
             FeatureArg::Dynamic => Self::DynamicAudio,
             FeatureArg::FindPhoneGesture => Self::FindPhoneGesture,
         }
+    }
+}
+
+fn named(value: &str, names: &[(&str, u8)]) -> Result<u8, String> {
+    names
+        .iter()
+        .find(|(name, _)| *name == value)
+        .map(|(_, id)| Ok(*id))
+        .unwrap_or_else(|| {
+            value.parse().map_err(|_| {
+                format!("Unknown value '{value}'. Use a named option or numeric wire ID.")
+            })
+        })
+}
+fn parse_ear(v: &str) -> Result<u8, String> {
+    named(v, &[("left", 1), ("right", 2)])
+}
+fn parse_gesture(v: &str) -> Result<u8, String> {
+    named(v, &[("double-tap", 2), ("triple-tap", 3), ("hold", 4)])
+}
+fn parse_function(v: &str) -> Result<u8, String> {
+    named(
+        v,
+        &[
+            ("off", 0),
+            ("play-pause", 1),
+            ("assistant", 4),
+            ("previous", 5),
+            ("next", 6),
+            ("noise-control", 8),
+        ],
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn names_work_without_numeric_protocol_knowledge() {
+        let args =
+            Args::try_parse_from(["buds", "bind", "left", "double-tap", "play-pause"]).unwrap();
+        assert!(matches!(
+            args.command,
+            Command::Bind {
+                ear: 1,
+                gesture: 2,
+                function: 1,
+                ..
+            }
+        ));
+        assert!(
+            Args::try_parse_from([
+                "buds", "eq", "create", "Warm", "2", "1", "0", "0", "-1", "-2"
+            ])
+            .is_ok()
+        );
+    }
+    #[test]
+    fn unknown_commands_and_wrong_gain_counts_fail() {
+        assert!(Args::try_parse_from(["buds", "nonsense"]).is_err());
+        assert!(Args::try_parse_from(["buds", "eq", "create", "Warm", "1", "2"]).is_err());
     }
 }

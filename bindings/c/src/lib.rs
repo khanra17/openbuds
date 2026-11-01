@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright 2026 OpenBuds contributors
 #![deny(unsafe_op_in_unsafe_fn)]
-mod air7;
+pub mod air7;
 mod driver;
+mod drivers;
+mod jvm;
 mod runtime;
+pub mod session;
 mod transport;
 use realme_buds::devices::air7 as model;
 pub use runtime::{BufferV1, ErrorInfo};
@@ -55,17 +58,7 @@ pub unsafe extern "C" fn ob_v1_driver_catalog(out: *mut BufferV1) -> i32 {
         unsafe {
             output(out, BufferV1::default())?;
         }
-        let catalog = serde_json::json!({
-            "abi_version": 1,
-            "sdk_version": env!("CARGO_PKG_VERSION"),
-            "drivers": realme_buds::devices::DRIVER_IDS,
-            "connection_metadata": {
-                (model::DRIVER_ID): {
-                    "kind": "rfcomm",
-                    "service_uuid_be": model::CONTROL_SERVICE.0
-                }
-            }
-        });
+        let catalog = driver::catalog();
         let data = serde_json::to_vec(&catalog)
             .map_err(|e| Failure::new(runtime::INTERNAL, e.to_string()))?;
         unsafe {

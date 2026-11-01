@@ -8,10 +8,24 @@ use realme_buds::{
     describe_feature_ids, describe_features, describe_fit, describe_multipoint, describe_touch,
     describe_versions, describe_wear,
 };
-use std::time::Duration;
+use std::{
+    sync::atomic::{AtomicBool, Ordering},
+    time::Duration,
+};
+static COMPACT: AtomicBool = AtomicBool::new(false);
+pub(crate) fn compact(value: bool) {
+    COMPACT.store(value, Ordering::Relaxed);
+}
 
 pub(crate) fn print_json(v: &impl serde::Serialize) -> Result<(), serde_json::Error> {
-    println!("{}", serde_json::to_string_pretty(v)?);
+    println!(
+        "{}",
+        if COMPACT.load(Ordering::Relaxed) {
+            serde_json::to_string(v)?
+        } else {
+            serde_json::to_string_pretty(v)?
+        }
+    );
     Ok(())
 }
 
@@ -31,9 +45,22 @@ pub(crate) fn execute<T: Transport>(
     command: Command,
     raw: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let command = if let Command::Eq { command } = command {
+        command.command()
+    } else {
+        command
+    };
     client.initialize()?;
     match command {
-        Command::Devices => unreachable!(),
+        Command::Devices | Command::Models | Command::Eq { .. } => unreachable!(),
+        Command::Call { request } => {
+            let request = serde_json::from_str(&request)?;
+            let response = openbuds::air7::execute(client, request, || {
+                crate::CANCELLED.load(Ordering::Relaxed)
+            })?;
+            print_json(&response)?;
+        }
+        Command::Rpc => unreachable!("RPC is dispatched through the model-neutral SDK session"),
         Command::Status => {
             let v = client.snapshot();
             print_view(raw, &v, &v.describe())?;
@@ -63,7 +90,14 @@ pub(crate) fn execute<T: Transport>(
             let v = client.features_by_ids(&ids)?;
             print_view(raw, &v, &describe_feature_ids(&v, &ids))?;
         }
-        Command::ToggleId { id, state } => {
+        Command::ToggleId {
+            id,
+            state,
+            confirm_experimental,
+        } => {
+            if !confirm_experimental {
+                return Err("Raw feature writes need --confirm-experimental".into());
+            }
             client.set_feature_id(id, state.enabled())?;
             let v = client.features_by_ids(&[id])?;
             print_view(raw, &v, &describe_feature_ids(&v, &[id]))?;
@@ -205,7 +239,18 @@ pub(crate) fn execute<T: Transport>(
             ear,
             gesture,
             function,
+            confirm_experimental,
         } => {
+            if !confirm_experimental
+                && !openbuds::air7::standard_touch_binding(&TouchBinding {
+                    ear,
+                    button: 1,
+                    gesture,
+                    function,
+                })
+            {
+                return Err("Unverified gesture/action needs --confirm-experimental. Stored readback is not proof it works.".into());
+            }
             client.set_touch(&[TouchBinding {
                 ear,
                 button: 1,
@@ -233,9 +278,15 @@ pub(crate) fn execute<T: Transport>(
         }
         Command::Watch => {
             client.subscribe()?;
-            loop {
-                match client.next_event(Duration::from_secs(30)) {
-                    Ok(e) => print_view(raw, &e, &e.describe())?,
+            while !crate::CANCELLED.load(Ordering::Relaxed) {
+                match client.next_event(Duration::from_millis(500)) {
+                    Ok(e) => {
+                        if raw {
+                            println!("{}", serde_json::to_string(&e)?);
+                        } else {
+                            println!("{}", serde_json::to_string(&e.describe())?);
+                        }
+                    }
                     Err(realme_buds::Error::Timeout) => continue,
                     Err(e) => return Err(e.into()),
                 }
@@ -249,11 +300,13 @@ pub(crate) fn execute<T: Transport>(
                 return Err("requires --confirm-sound; remove earbuds from your ears first".into());
             }
             if state.enabled() {
-                client.find_buds_for(Duration::from_secs(3))?;
-                println!("start/stop acknowledged");
+                client.find_buds_for_with_cancel(Duration::from_secs(3), || {
+                    crate::CANCELLED.load(Ordering::Relaxed)
+                })?;
+                print_json(&serde_json::json!({"completed":true}))?;
             } else {
                 client.find_buds(false)?;
-                println!("stop acknowledged");
+                print_json(&serde_json::json!({"stopped":true}))?;
             }
         }
         Command::Fit {
@@ -264,11 +317,13 @@ pub(crate) fn execute<T: Transport>(
                 return Err("requires --confirm-sound".into());
             }
             if state.enabled() {
-                let v = client.run_fit_test(Duration::from_secs(15))?;
+                let v = client.run_fit_test_with_cancel(Duration::from_secs(15), || {
+                    crate::CANCELLED.load(Ordering::Relaxed)
+                })?;
                 print_view(raw, &v, &describe_fit(&v))?;
             } else {
                 client.fit_test(false)?;
-                println!("stop acknowledged");
+                print_json(&serde_json::json!({"stopped":true}))?;
             }
         }
     }

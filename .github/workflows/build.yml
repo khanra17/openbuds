@@ -1,0 +1,204 @@
+name: Release builds and checks
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_BUILD_JOBS: 2
+jobs:
+  desktop:
+    name: Desktop / ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows-x64
+            target: x86_64-pc-windows-msvc
+          - os: ubuntu-24.04
+            platform: linux-x64
+            target: x86_64-unknown-linux-gnu
+          - os: macos-15
+            platform: macos-arm64
+            target: aarch64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Verify runner architecture matches the download label
+        shell: bash
+        run: |
+          host=$(rustc -vV | awk '/^host:/ { print $2 }' | tr -d '\r')
+          if [ "$host" != '${{ matrix.target }}' ]; then
+            echo "Runner target $host does not match advertised target ${{ matrix.target }}"
+            exit 1
+          fi
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config libgl1-mesa-dri libxkbcommon0 libxrender1 libxtst6 fonts-dejavu-core xvfb xauth
+      - run: cargo fmt --all -- --check
+      - run: cargo test --workspace --all-features --locked
+      - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+      - run: cargo build --workspace --release --locked
+      - name: Test runtime-variant packaging
+        run: python -m unittest discover -s tools -p "test_*.py" -v
+      - name: Test shared UI and package optimized desktop image (no publisher signing)
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            xvfb-run -a bash apps/compose/gradlew -p apps/compose :shared:desktopTest :desktopApp:createReleaseDistributable :desktopApp:writeRuntimeMetadata
+          else
+            bash apps/compose/gradlew -p apps/compose :shared:desktopTest :desktopApp:createReleaseDistributable :desktopApp:writeRuntimeMetadata
+          fi
+      - name: Package bundled-runtime and external-Java downloads
+        shell: bash
+        run: |
+          cargo metadata --format-version 1 --locked --filter-platform '${{ matrix.target }}' > target/rust-metadata.json
+          image=apps/compose/desktopApp/build/compose/binaries/main-release/app/OpenBuds
+          launcher=target/release/openbuds-launcher
+          if [ "$RUNNER_OS" = macOS ]; then image="$image.app"; fi
+          if [ "$RUNNER_OS" = Windows ]; then launcher="$launcher.exe"; fi
+          for runtime in bundled external-java; do
+            python tools/package_release.py --platform '${{ matrix.platform }}' --runtime "$runtime" --launcher "$launcher" --image "$image" --rust-metadata target/rust-metadata.json --jvm-metadata apps/compose/desktopApp/build/runtime-artifacts.tsv
+          done
+      - name: Stage standalone CLI and C SDK with matching source and notices
+        shell: bash
+        env:
+          NATIVE_PLATFORM: ${{ matrix.platform }}
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import shutil
+          import hashlib
+          platform = os.environ["NATIVE_PLATFORM"]
+          name = f"OpenBuds-{platform}-cli-sdk"
+          output = Path("target/native-artifacts") / name
+          output.mkdir(parents=True)
+          release = Path("target/release")
+          if platform.startswith("windows"):
+              binaries = ["buds.exe", "openbuds.dll", "openbuds.dll.lib"]
+          elif platform.startswith("macos"):
+              binaries = ["buds", "libopenbuds.dylib"]
+          else:
+              binaries = ["buds", "libopenbuds.so"]
+          for name in binaries:
+              shutil.copy2(release / name, output / name)
+          shutil.copytree("bindings/c/include", output / "include")
+          shutil.copy2("bindings/c/README.md", output / "C-SDK.md")
+          shutil.copy2("bindings/c/tests/smoke.c", output / "smoke.c")
+          shutil.copy2("docs/cli.md", output / "CLI.md")
+          source = Path("target/packages/staging") / f"OpenBuds-{platform}-bundled-runtime"
+          for name in ["LICENSE", "THIRD_PARTY_NOTICES.md", "THIRD_PARTY_LICENSES.html", "DEPENDENCIES.json", "SOURCE.md", "workspace-source.tar.gz"]:
+              shutil.copy2(source / name, output / name)
+          (output / "BUILD.txt").write_text(f"Platform: {platform}\nCommit: {os.environ['GITHUB_SHA']}\nNo publisher signing. See SOURCE.md and CLI.md.\n", encoding="utf-8")
+          archive = Path(shutil.make_archive(str(Path("target/packages") / name), "zip" if platform.startswith("windows") else "gztar", root_dir=output.parent, base_dir=output.name))
+          with archive.open("rb") as stream:
+              checksum = hashlib.file_digest(stream, "sha256").hexdigest()
+          archive.with_suffix(archive.suffix + ".sha256").write_text(f"{checksum}  {archive.name}\n", encoding="utf-8")
+          PY
+      - uses: actions/upload-artifact@v7
+        with:
+          name: openbuds-cli-sdk-${{ matrix.platform }}
+          path: target/packages/*-cli-sdk.*
+          if-no-files-found: error
+          retention-days: 14
+      - name: Smoke-check both launchers and real renderers (no Bluetooth)
+        shell: bash
+        run: |
+          image=apps/compose/desktopApp/build/compose/binaries/main-release/app/OpenBuds
+          if [ "$RUNNER_OS" = macOS ]; then image="$image.app"; fi
+          root='target/packages/staging/OpenBuds-${{ matrix.platform }}-external-java/OpenBuds'
+          if [ "$RUNNER_OS" = Linux ]; then
+            xvfb-run -a python tools/smoke_desktop.py --platform '${{ matrix.platform }}' --image "$image" --external "$root"
+          else
+            python tools/smoke_desktop.py --platform '${{ matrix.platform }}' --image "$image" --external "$root"
+          fi
+      - uses: actions/upload-artifact@v7
+        with:
+          name: openbuds-${{ matrix.platform }}-bundled-runtime
+          path: target/packages/*-bundled-runtime.*
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@v7
+        with:
+          name: openbuds-${{ matrix.platform }}-external-java
+          path: target/packages/*-external-java.*
+          if-no-files-found: error
+          retention-days: 14
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ui-tests-${{ matrix.platform }}
+          path: |
+            apps/compose/shared/build/reports/tests/
+            apps/compose/shared/build/reports/ui/
+          retention-days: 7
+  android:
+    name: Android / optimized public-development-key release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android, armv7-linux-androideabi, x86_64-linux-android
+      - uses: Swatinem/rust-cache@v2
+      - uses: gradle/actions/setup-gradle@v6
+      - run: sdkmanager --channel=3 "platforms;android-37.0" "build-tools;37.0.0" "ndk;30.0.16248370"
+      - run: cargo install cargo-ndk --version 4.1.2 --locked
+      - name: Verify the deliberately public, fixed signing key
+        run: echo '221e0a3106aa4c3ccc154e0a418b55020b3f9ea6e84f92e8749cd9e2f39f5e58  apps/compose/androidApp/signing/public-dev.keystore' | sha256sum -c -
+      - run: bash apps/compose/gradlew -p apps/compose :androidApp:assembleRelease :androidApp:lintRelease :androidApp:writeRuntimeMetadata
+      - name: Verify APK signing, alignment and non-debuggable manifest
+        shell: bash
+        run: |
+          apk=apps/compose/androidApp/build/outputs/apk/release/androidApp-release.apk
+          tools="$ANDROID_HOME/build-tools/37.0.0"
+          "$tools/apksigner" verify --verbose "$apk"
+          "$tools/zipalign" -c -P 16 4 "$apk"
+          "$tools/aapt" dump badging "$apk" > target/apk-badging.txt
+          "$tools/aapt" dump permissions "$apk" > target/apk-permissions.txt
+          if grep -q application-debuggable target/apk-badging.txt; then echo 'Refusing a debuggable APK'; exit 1; fi
+          if grep -E 'android.permission.(INTERNET|BLUETOOTH_SCAN|ACCESS_FINE_LOCATION|ACCESS_COARSE_LOCATION|ACCESS_BACKGROUND_LOCATION)' target/apk-permissions.txt; then echo 'Refusing unexpected network, scanning, or location permissions'; exit 1; fi
+      - name: Package APK with notices and source information
+        run: |
+          cargo metadata --format-version 1 --locked --filter-platform aarch64-linux-android > target/rust-metadata.json
+          python tools/package_release.py --platform android --apk apps/compose/androidApp/build/outputs/apk/release/androidApp-release.apk --rust-metadata target/rust-metadata.json --jvm-metadata apps/compose/androidApp/build/runtime-artifacts.tsv
+      - uses: actions/upload-artifact@v7
+        with:
+          name: openbuds-android-release-public-dev-key
+          path: |
+            target/packages/*.zip
+            target/packages/*.sha256
+          if-no-files-found: error
+          retention-days: 14
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-lint
+          path: apps/compose/androidApp/build/reports/lint-results-release.*
+          retention-days: 7

@@ -1,0 +1,2 @@
+-keep,allowoptimization class org.openbuds.core.NativeBridge { *; }
+-keep,allowoptimization class org.openbuds.android.AndroidTransport { public *; }

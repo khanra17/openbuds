@@ -9,6 +9,17 @@ use serde_json::Value;
 use std::time::Duration;
 
 pub const SCHEMA_VERSION: u32 = 1;
+/// Conservative normal-interface policy, not proof of physical behavior on every firmware.
+pub fn standard_touch_binding(b: &TouchBinding) -> bool {
+    matches!(b.ear, 1 | 2)
+        && b.button == 1
+        && match b.gesture {
+            2 => matches!(b.function, 0 | 1),
+            3 => matches!(b.function, 0 | 5 | 6),
+            4 => b.function == 8,
+            _ => false,
+        }
+}
 #[derive(Debug, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Request {
@@ -48,6 +59,8 @@ pub enum Request {
     Touch {},
     SetTouch {
         bindings: Vec<TouchBinding>,
+        #[serde(default)]
+        confirm_experimental: bool,
     },
     EqPreset {},
     SetEqPreset {
@@ -183,7 +196,14 @@ pub fn execute<T: Transport>(
             Value::Null
         }
         Request::Touch {} => value(describe_touch(&c.touch()?))?,
-        Request::SetTouch { bindings } => {
+        Request::SetTouch {
+            bindings,
+            confirm_experimental,
+        } => {
+            confirm(
+                confirm_experimental || bindings.iter().all(standard_touch_binding),
+                "Unverified gesture/action requires confirm_experimental; stored readback is not physical support",
+            )?;
             c.set_touch(&bindings)?;
             Value::Null
         }
