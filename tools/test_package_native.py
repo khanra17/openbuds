@@ -42,6 +42,10 @@ class NativePackageTest(unittest.TestCase):
         for platform in package_native.BINARIES:
             with self.subTest(platform=platform):
                 self.prepare(platform)
+                # A successful previous CI job can restore this entire tree from Cargo cache.
+                cached = self.root / "target/native-artifacts" / f"OpenBuds-{platform}-cli-sdk"
+                cached.mkdir(parents=True)
+                (cached / "stale-marker").write_text("must not enter the new archive")
                 with patch.object(package_native.subprocess, "check_output", side_effect=["", self.commit]):
                     archive = package_native.package_native(platform, self.root)
                 package = f"OpenBuds-{platform}-cli-sdk"
@@ -52,16 +56,19 @@ class NativePackageTest(unittest.TestCase):
                         self.assertIn(f"{package}/buds.exe", files.namelist())
                         self.assertIn(f"{package}/openbuds.dll.lib", files.namelist())
                         self.assertIn(f"{package}/include/openbuds.h", files.namelist())
+                        self.assertNotIn(f"{package}/stale-marker", files.namelist())
                 else:
                     with tarfile.open(archive) as files:
                         self.assertIn(f"{package}/include/openbuds.h", files.getnames())
+                        self.assertNotIn(f"{package}/stale-marker", files.getnames())
                         if os.name != "nt":  # Mode preservation is meaningful on the native Unix runners.
                             self.assertNotEqual(files.getmember(f"{package}/buds").mode & 0o111, 0)
                 checksum = archive.with_suffix(archive.suffix + ".sha256").read_text().split()[0]
                 self.assertEqual(checksum, hashlib.sha256(archive.read_bytes()).hexdigest())
                 with patch.object(package_native.subprocess, "check_output", side_effect=["", self.commit]):
-                    with self.assertRaises(FileExistsError):
-                        package_native.package_native(platform, self.root)
+                    self.assertEqual(archive, package_native.package_native(platform, self.root))
+                self.assertTrue((cached / "stale-marker").exists())
+                self.assertEqual(list((self.root / "target").glob("openbuds-native-*")), [])
 
     def test_dirty_source_is_rejected_before_staging(self):
         with patch.object(package_native.subprocess, "check_output", return_value=" M source.py"):

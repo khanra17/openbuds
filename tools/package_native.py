@@ -5,6 +5,7 @@ import hashlib
 from pathlib import Path
 import shutil
 import subprocess
+import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 BINARIES = {
@@ -33,24 +34,27 @@ def package_native(platform, root=ROOT):
         if not (source / filename).is_file():
             raise FileNotFoundError(source / filename)
     package_name = f"OpenBuds-{platform}-cli-sdk"
-    output = root / "target/native-artifacts" / package_name
-    output.mkdir(parents=True, exist_ok=False)
-    for filename in BINARIES[platform]:
-        shutil.copy2(release / filename, output / filename)
-    shutil.copytree(root / "bindings/c/include", output / "include")
-    shutil.copy2(root / "bindings/c/README.md", output / "C-SDK.md")
-    shutil.copy2(root / "bindings/c/tests/smoke.c", output / "smoke.c")
-    shutil.copy2(root / "docs/cli.md", output / "CLI.md")
-    for filename in NOTICES:
-        shutil.copy2(source / filename, output / filename)
-    (output / "BUILD.txt").write_text(
-        f"Platform: {platform}\nCommit: {commit}\nNo publisher signing. See SOURCE.md and CLI.md.\n", encoding="utf-8")
-    archive = Path(shutil.make_archive(str(root / "target/packages" / package_name),
-        "zip" if platform.startswith("windows") else "gztar", root_dir=output.parent, base_dir=output.name))
-    with archive.open("rb") as stream:
-        checksum = hashlib.file_digest(stream, "sha256").hexdigest()
-    archive.with_suffix(archive.suffix + ".sha256").write_text(f"{checksum}  {archive.name}\n", encoding="utf-8")
-    return archive
+    # Cargo caches can restore old packaging directories. Build in an isolated
+    # temporary tree and never reuse those files in a new source-matched archive.
+    with tempfile.TemporaryDirectory(prefix="openbuds-native-", dir=root / "target") as temporary:
+        output = Path(temporary) / package_name
+        output.mkdir(parents=True, exist_ok=False)
+        for filename in BINARIES[platform]:
+            shutil.copy2(release / filename, output / filename)
+        shutil.copytree(root / "bindings/c/include", output / "include")
+        shutil.copy2(root / "bindings/c/README.md", output / "C-SDK.md")
+        shutil.copy2(root / "bindings/c/tests/smoke.c", output / "smoke.c")
+        shutil.copy2(root / "docs/cli.md", output / "CLI.md")
+        for filename in NOTICES:
+            shutil.copy2(source / filename, output / filename)
+        (output / "BUILD.txt").write_text(
+            f"Platform: {platform}\nCommit: {commit}\nNo publisher signing. See SOURCE.md and CLI.md.\n", encoding="utf-8")
+        archive = Path(shutil.make_archive(str(root / "target/packages" / package_name),
+            "zip" if platform.startswith("windows") else "gztar", root_dir=output.parent, base_dir=output.name))
+        with archive.open("rb") as stream:
+            checksum = hashlib.file_digest(stream, "sha256").hexdigest()
+        archive.with_suffix(archive.suffix + ".sha256").write_text(f"{checksum}  {archive.name}\n", encoding="utf-8")
+        return archive
 
 
 def main():
