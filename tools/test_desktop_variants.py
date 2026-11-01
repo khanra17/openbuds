@@ -103,7 +103,7 @@ class DesktopVariantsTest(unittest.TestCase):
                     "--runtime", runtime, "--launcher", str(self.launcher),
                     "--rust-metadata", str(self.root / "metadata.json"), "--jvm-metadata", str(self.root / "metadata.tsv")]
             with patch.object(package_release, "ROOT", self.root), patch("sys.argv", argv), \
-                    patch.object(package_release.subprocess, "check_output", side_effect=["", "a" * 40, b"matching source"]), \
+                    patch.object(package_release.subprocess, "check_output", side_effect=["", "a" * 40]), \
                     contextlib.redirect_stdout(io.StringIO()):
                 package_release.main()
             name = f"OpenBuds-windows-x64-{suffix}"
@@ -116,6 +116,11 @@ class DesktopVariantsTest(unittest.TestCase):
                 self.assertIn(f"{name}/OpenBudsTray.exe", files)
                 self.assertNotIn(f"{name}/buds.exe", files)
                 self.assertNotIn(f"{name}/include/openbuds.h", files)
+                self.assertNotIn(f"{name}/workspace-source.tar.gz", files)
+                self.assertNotIn(f"{name}/Cargo.lock", files)
+                source = archive.read(f"{name}/SOURCE.md").decode()
+                self.assertIn("git checkout --detach " + "a" * 40, source)
+                self.assertIn(f"{name}/LICENSE", files)
             self.assertTrue(archive_path.with_suffix(".zip.sha256").is_file())
 
     def test_android_exposes_release_apk_directly_with_checksum_and_notices(self):
@@ -130,7 +135,7 @@ class DesktopVariantsTest(unittest.TestCase):
         argv = ["package_release.py", "--platform", "android", "--apk", str(apk),
                 "--rust-metadata", str(self.root / "metadata.json"), "--jvm-metadata", str(self.root / "metadata.tsv")]
         with patch.object(package_release, "ROOT", self.root), patch("sys.argv", argv), \
-                patch.object(package_release.subprocess, "check_output", side_effect=["", "a" * 40, b"matching source"]), \
+                patch.object(package_release.subprocess, "check_output", side_effect=["", "a" * 40]), \
                 contextlib.redirect_stdout(io.StringIO()):
             package_release.main()
         output = self.root / "target/packages/staging/OpenBuds-android-release"
@@ -138,7 +143,9 @@ class DesktopVariantsTest(unittest.TestCase):
         import hashlib
         checksum = (output / "OpenBuds-android-release.apk.sha256").read_text().split()[0]
         self.assertEqual(checksum, hashlib.sha256(apk.read_bytes()).hexdigest())
-        self.assertTrue((output / "SOURCE.md").is_file())
+        self.assertIn("git checkout --detach " + "a" * 40, (output / "SOURCE.md").read_text())
+        self.assertFalse((output / "workspace-source.tar.gz").exists())
+        self.assertFalse((output / "Cargo.lock").exists())
         self.assertTrue((output / "THIRD_PARTY_LICENSES.html").is_file())
         self.assertEqual(list((self.root / "target/packages").glob("*.zip")), [])
 

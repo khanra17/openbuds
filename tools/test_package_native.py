@@ -2,7 +2,6 @@
 import hashlib
 import os
 from pathlib import Path
-import subprocess
 import tarfile
 import tempfile
 import unittest
@@ -38,6 +37,8 @@ class NativePackageTest(unittest.TestCase):
         for filename in package_native.NOTICES:
             (source / filename).write_text("matching notices")
         (source / "SOURCE.md").write_text(f"https://github.com/example/repo/tree/{self.commit}")
+        # Cached staging from older releases must not leak source archives.
+        (source / "workspace-source.tar.gz").write_bytes(b"obsolete source archive")
         return source
 
     def test_each_platform_has_separate_cli_and_c_sdk_with_correct_contents(self):
@@ -67,7 +68,9 @@ class NativePackageTest(unittest.TestCase):
                     self.assertEqual(f"{package}/include/openbuds.h" in names, product == "c-sdk")
                     self.assertEqual(f"{package}/smoke.c" in names, product == "c-sdk")
                     self.assertEqual(f"{package}/CLI.md" in names, product == "cli")
-                    self.assertIn(f"{package}/workspace-source.tar.gz", names)
+                    self.assertNotIn(f"{package}/workspace-source.tar.gz", names)
+                    self.assertIn(f"{package}/SOURCE.md", names)
+                    self.assertIn(f"{package}/LICENSE", names)
                     self.assertNotIn(f"{package}/stale-marker", names)
                     checksum = archive.with_suffix(archive.suffix + ".sha256").read_text().split()[0]
                     self.assertEqual(checksum, hashlib.sha256(archive.read_bytes()).hexdigest())
@@ -102,28 +105,6 @@ class NativePackageTest(unittest.TestCase):
         with patch.object(package_native.subprocess, "check_output", side_effect=["", self.commit]):
             self.assertTrue(package_native.package_native("windows-x64", "cli", self.root).exists())
 
-    def test_rust_sdk_contains_committed_source_not_build_outputs(self):
-        def git(*args):
-            subprocess.run(["git", *args], cwd=self.root, check=True, capture_output=True)
-        (self.root / ".gitignore").write_text("/target/\n*.keystore\n")
-        (self.root / "Cargo.toml").write_text('[workspace]\nmembers = []\n')
-        (self.root / "Cargo.lock").write_text("version = 4\n")
-        git("init")
-        git("add", ".")
-        git("-c", "user.name=Test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "commit", "-m", "fixture")
-        (self.root / "target/release").mkdir(parents=True)
-        (self.root / "target/release/buds").write_bytes(b"not SDK source")
-        (self.root / "ignored.keystore").write_bytes(b"must not ship")
-        archive = package_native.package_rust_sdk(self.root)
-        with tarfile.open(archive) as files:
-            names = files.getnames()
-            for name in ["Cargo.toml", "Cargo.lock", "docs/sdk.md", "bindings/c/include/openbuds.h"]:
-                self.assertIn(f"OpenBuds-rust-sdk/{name}", names)
-            self.assertFalse(any("/target/" in name or name.endswith(".keystore") for name in names))
-        self.assertTrue(archive.with_suffix(".gz.sha256").is_file())
-        (self.root / "docs/sdk.md").write_text("uncommitted source")
-        with self.assertRaises(ValueError):
-            package_native.package_rust_sdk(self.root)
 
 
 if __name__ == "__main__":

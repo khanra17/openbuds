@@ -14,7 +14,7 @@ BINARIES = {
     "macos-arm64": {"cli": ("buds",), "c-sdk": ("libopenbuds.dylib",)},
 }
 NOTICES = ("LICENSE", "THIRD_PARTY_NOTICES.md", "THIRD_PARTY_LICENSES.html",
-           "DEPENDENCIES.json", "SOURCE.md", "workspace-source.tar.gz")
+           "DEPENDENCIES.json", "SOURCE.md")
 
 
 def clean_commit(root):
@@ -27,18 +27,6 @@ def checksum(archive):
     with archive.open("rb") as stream:
         value = hashlib.file_digest(stream, "sha256").hexdigest()
     archive.with_suffix(archive.suffix + ".sha256").write_text(f"{value}  {archive.name}\n", encoding="utf-8")
-
-
-def package_rust_sdk(root=ROOT):
-    # Rust libraries are consumed as source, not compiler-specific .rlib binaries.
-    # Preserve the workspace and lockfile so all path dependencies remain valid.
-    clean_commit(root)
-    archive = root / "target/packages/OpenBuds-rust-sdk-source.tar.gz"
-    archive.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run(["git", "archive", "--format=tar.gz", "--prefix=OpenBuds-rust-sdk/",
-                    "-o", str(archive), "HEAD"], cwd=root, check=True)
-    checksum(archive)
-    return archive
 
 
 def package_native(platform, product, root=ROOT):
@@ -83,15 +71,10 @@ def package_native(platform, product, root=ROOT):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--platform", choices=BINARIES)
-    parser.add_argument("--product", choices=["cli", "c-sdk", "rust-sdk"], required=True)
+    parser.add_argument("--platform", choices=BINARIES, required=True)
+    parser.add_argument("--product", choices=["cli", "c-sdk"], required=True)
     args = parser.parse_args()
-    if args.product == "rust-sdk":
-        print(package_rust_sdk())
-    else:
-        if not args.platform:
-            parser.error("--platform is required for native binaries")
-        print(package_native(args.platform, args.product))
+    print(package_native(args.platform, args.product))
 
 
 if __name__ == "__main__":

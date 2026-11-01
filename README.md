@@ -68,7 +68,8 @@ See [app build instructions](apps/compose/README.md) for SDK/NDK installation, d
 | `OpenBuds-desktop-<platform>-external-java` | Same optimized GUI, requiring Java 21+ |
 | `OpenBuds-CLI-<platform>` | Standalone `buds` executable and CLI documentation; no SDK libraries or headers |
 | `OpenBuds-C-SDK-<platform>` | Native shared library, Windows import library, C header, documentation and C example; no CLI executable |
-| `OpenBuds-Rust-SDK-source` | Matching Rust source workspace/lockfile for developing your own applications |
+
+Source code and the Rust SDK are available directly from Git; no source-release archive is published or embedded in binary downloads. Each package’s `SOURCE.md` links to its exact commit and build instructions.
 
 Platforms: Windows x64, Linux x64, macOS ARM64. macOS has no built-in Bluetooth transport. See [SDK integration](docs/sdk.md). Lint and UI tests still run, but diagnostic artifacts are uploaded only on failure, not alongside successful release downloads. Downloads are under the **Release builds and checks** workflow; **Check** is validation only.
 

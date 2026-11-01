@@ -82,9 +82,6 @@ jobs:
         run: |
           python tools/package_native.py --platform '${{ matrix.platform }}' --product cli
           python tools/package_native.py --platform '${{ matrix.platform }}' --product c-sdk
-      - name: Package Rust SDK source workspace
-        if: runner.os == 'Linux'
-        run: python tools/package_native.py --product rust-sdk
       - name: Smoke-check both launchers and real renderers (no Bluetooth)
         shell: bash
         run: |
@@ -106,13 +103,6 @@ jobs:
         with:
           name: OpenBuds-C-SDK-${{ matrix.platform }}
           path: target/packages/OpenBuds-${{ matrix.platform }}-c-sdk.*
-          if-no-files-found: error
-          retention-days: 14
-      - if: runner.os == 'Linux'
-        uses: actions/upload-artifact@v7
-        with:
-          name: OpenBuds-Rust-SDK-source
-          path: target/packages/OpenBuds-rust-sdk-source.tar.gz*
           if-no-files-found: error
           retention-days: 14
       - uses: actions/upload-artifact@v7

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Package optimized GUI applications with notices and matching source."""
+"""Package optimized GUI applications with notices and exact Git source links."""
 import argparse
 import hashlib
 import html
@@ -50,7 +50,7 @@ def main():
         parser.error("--runtime applies only to desktop packages")
     if args.image and args.runtime == "external-java" and not args.launcher:
         parser.error("--launcher is required for an external-Java package")
-    # An archive of HEAD must describe the binaries, not silently omit local source.
+    # The linked Git revision must describe the binaries, not omit local changes.
     # Validate before touching staging or existing release outputs.
     status = subprocess.check_output(
         ["git", "status", "--porcelain", "--untracked-files=all"], cwd=ROOT, text=True
@@ -85,10 +85,8 @@ def main():
         windows = args.platform.startswith("windows")
         if windows:
             shutil.copy2(ROOT / "target/release/openbuds-tray.exe", stage / "OpenBudsTray.exe")
-    for file in ["LICENSE", "THIRD_PARTY_NOTICES.md", "Cargo.lock"]:
+    for file in ["LICENSE", "THIRD_PARTY_NOTICES.md"]:
         shutil.copy2(ROOT / file, stage / file)
-    source = subprocess.check_output(["git", "archive", "--format=tar.gz", "--prefix=OpenBuds-source/", "HEAD"], cwd=ROOT)
-    (stage / "workspace-source.tar.gz").write_bytes(source)
     lock = {(p["name"], p["version"]): p for p in tomllib.loads((ROOT / "Cargo.lock").read_text())["package"]}
     dependencies = []
     notices = ["<!doctype html><meta charset='utf-8'><title>OpenBuds dependency notices</title>",
@@ -127,11 +125,14 @@ def main():
     (stage / "DEPENDENCIES.json").write_text(json.dumps(dependencies, indent=2) + "\n", encoding="utf-8")
     (stage / "SOURCE.md").write_text(
         f"# Source and build information\n\nBuilt from https://github.com/khanra17/openbuds-air7/tree/{commit}\n\n"
-        "The workspace archive contains that revision, not an offline bundle of all third-party sources. "
+        f"Get the matching code and build instructions from Git:\n\n"
+        f"```sh\ngit clone https://github.com/khanra17/openbuds-air7.git\n"
+        f"cd openbuds-air7\ngit checkout --detach {commit}\n```\n\n"
+        "Source is not bundled in this download. The repository at that commit includes the lockfile. "
         "DEPENDENCIES.json records pinned Cargo source archives/checksums and JVM source coordinates. "
         "Use the repository build instructions and preserve applicable dependency notices. Native Skiko/Skia "
         "source pins are in the corresponding Skiko source repository. Before redistributing elsewhere, "
-        "provide access to all required matching GPL corresponding sources/build information, not only this workspace archive.\n",
+        "preserve access to the exact Git revision and all required matching GPL corresponding sources/build information.\n",
         encoding="utf-8")
     runtime_note = ("External-Java variant: NO Java is included. Install a complete matching-architecture Java 21+ desktop JRE/JDK. JAVA_HOME takes precedence over PATH. The launcher checks compatibility and never downloads Java. See OpenBuds/RUNTIME.txt.\n\n"
                     if args.image and args.runtime == "external-java" else "Desktop bundled-runtime variant: Java is included; no Java installation is required.\n\n" if args.image else "")
